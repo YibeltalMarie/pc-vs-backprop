@@ -1,0 +1,26 @@
+# Default configuration. Values marked TUNE are placeholders:
+# they must be chosen on the validation set and justified in the report.
+
+seed: 0
+device: auto            # auto | cpu | cuda  (decide from measured epoch time)
+
+data:
+  name: fashion_mnist
+  val_size: 10000       # taken from the 60k training set
+  normalize: train_mean_std
+
+model:
+  hidden_sizes: [512, 256, 128]
+  activation: relu      # ablate: tanh, gelu
+
+training:
+  batch_size: 256       # TUNE (speed vs stability on Colab)
+  epochs: 30            # with early stopping on validation
+  weight_optimizer: sgd_momentum   # same for both models
+  lr: 0.01              # TUNE
+  momentum: 0.9
+
+pc:
+  inference_steps: 20   # TUNE (ablate 5, 10, 20, 50)
+  state_lr: 0.1         # TUNE
+  state_init: forward   # forward | zeros | random
