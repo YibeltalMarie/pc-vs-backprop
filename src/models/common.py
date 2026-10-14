@@ -53,7 +53,7 @@ def get_activation(name: str):
 # ----------------------------------------------------------------------------
 
 
-def make_initial_weights(layer_sizes, init: str = "he", seed: int = 0):
+def make_initial_weights(layer_sizes, init: str = "he", seed: int = 0, last_layer_scale: float = 1.0):
     """Create [(W, b), ...] with W of shape [out, in].
 
     Uses its own torch.Generator, so it does not touch the global RNG and the
@@ -61,6 +61,12 @@ def make_initial_weights(layer_sizes, init: str = "he", seed: int = 0):
       he     : std = sqrt(2 / fan_in)            (designed for relu-type units)
       xavier : std = sqrt(2 / (fan_in + fan_out)) (designed for tanh-type units)
     Biases start at zero.
+
+    last_layer_scale multiplies ONLY the final (linear output) layer's weights
+    after they are drawn, so all other layers are identical for any scale.
+    Reason (measured): the output layer is linear and targets are 0/1, so a
+    full-size He draw gives a very large initial loss (see tests/test_init.py).
+    This is an OPEN decision in the plan, shared by both models.
     """
     if init not in ("he", "xavier"):
         raise ValueError(f"Unknown init '{init}'. Options: he, xavier")
@@ -74,6 +80,8 @@ def make_initial_weights(layer_sizes, init: str = "he", seed: int = 0):
         W = torch.randn(fan_out, fan_in, generator=g) * std
         b = torch.zeros(fan_out)
         params.append((W, b))
+    W_last, b_last = params[-1]
+    params[-1] = (W_last * last_layer_scale, b_last)
     return params
 
 
