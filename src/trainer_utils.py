@@ -5,6 +5,7 @@ Rules implemented here (see the Decision record in the project plan):
 - early stopping with patience; the best epoch's weights are restored
 - evaluation runs in batches, never touching the test set unless asked
 - each run is saved as one JSON file; finished runs are skipped (resumable)
+- diagnostics() reports collapse indicators (output spread, dead ReLU units)
 """
 
 import copy
@@ -42,6 +43,23 @@ def evaluate(model, x, y, loss: str, batch_size: int = 2000):
         total_loss += loss_fn(out, yb, loss).item() * xb.shape[0]
         correct += (out.argmax(dim=1) == yb).sum().item()
     return total_loss / n, correct / n
+
+
+@torch.no_grad()
+def diagnostics(model, x, n: int = 2000) -> dict:
+    """Collapse indicators on (up to) n samples.
+
+    output_spread : mean over output units of the std across samples.
+                    Near 0 means the model outputs (almost) the same vector for
+                    every input, i.e. a constant predictor.
+    dead_fractions: per hidden layer, fraction of units inactive for every
+                    sample (relu models only; None otherwise).
+    """
+    x = x[:n]
+    out = model(x)
+    d = {"output_spread": out.std(dim=0).mean().item()}
+    d["dead_fractions"] = model.dead_fractions(x) if hasattr(model, "dead_fractions") else None
+    return d
 
 
 class EarlyStopper:
