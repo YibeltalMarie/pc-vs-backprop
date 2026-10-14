@@ -6,8 +6,12 @@ Gradient source:
   in tests); used to show both give the same training curve.
 The test set is only evaluated when evaluate_test=True (final runs only).
 Every epoch also records collapse diagnostics (output spread, dead units).
+
+Divergence guard (same idea as the PC trainer): if a batch loss or the validation
+loss is non-finite, training stops and the run is saved with diverged=True.
 """
 
+import math
 import time
 
 import torch
@@ -46,7 +50,7 @@ def train_backprop(
         result = load_json(path)
         result["resumed"] = True
         if verbose:
-            print(f"[skip] {run_name} already done (best val acc {result['best_val_acc']:.4f})")
+            print(f"[skip] {run_name} already done (best val acc {result['best_val_acc']})")
         return result
 
     m, t = cfg["model"], cfg["training"]
@@ -64,6 +68,7 @@ def train_backprop(
     history = []
     t_start = time.time()
     stopped_early = False
+    diverged = False
 
     for epoch in range(t["max_epochs"]):
         if device.type == "cuda":
@@ -83,14 +88,28 @@ def train_backprop(
                 out = model(xb)
                 batch_loss = loss_fn(out, yb, loss_name)
                 batch_loss.backward()
+            batch_loss_value = batch_loss.item()
+            if not math.isfinite(batch_loss_value):
+                diverged = True
+                break
             opt.step()
-            running += batch_loss.item() * xb.shape[0]
+            running += batch_loss_value * xb.shape[0]
+
+        if diverged:
+            if verbose:
+                print(f"epoch {epoch:3d} | batch loss became non-finite: DIVERGED (lr too large?)")
+            break
 
         if device.type == "cuda":
             torch.cuda.synchronize()
         epoch_time = time.time() - t0
 
         val_loss, val_acc = evaluate(model, data.x_val, data.y_val, loss_name)
+        if not math.isfinite(val_loss):
+            diverged = True
+            if verbose:
+                print(f"epoch {epoch:3d} | validation loss became non-finite: DIVERGED")
+            break
         diag = diagnostics(model, data.x_val)
         history.append({
             "epoch": epoch,
@@ -114,7 +133,7 @@ def train_backprop(
             break
 
     stopper.restore(model)
-    best = history[stopper.best_epoch]
+    best = history[stopper.best_epoch] if history else None
 
     result = {
         "run_name": run_name,
@@ -125,17 +144,18 @@ def train_backprop(
         "layer_sizes": layer_sizes,
         "n_parameters": sum(p.numel() for p in model.parameters()),
         "history": history,
-        "best_epoch": stopper.best_epoch,
-        "best_val_acc": best["val_acc"],
-        "best_val_loss": best["val_loss"],
+        "best_epoch": stopper.best_epoch if history else None,
+        "best_val_acc": best["val_acc"] if best else None,
+        "best_val_loss": best["val_loss"] if best else None,
         "epochs_run": len(history),
         "stopped_early": stopped_early,
+        "diverged": diverged,
         "total_train_time_s": time.time() - t_start,
-        "mean_epoch_time_s": sum(h["epoch_time_s"] for h in history) / len(history),
+        "mean_epoch_time_s": (sum(h["epoch_time_s"] for h in history) / len(history)) if history else None,
         "environment": environment_info(),
         "resumed": False,
     }
-    if evaluate_test:
+    if evaluate_test and history:
         test_loss, test_acc = evaluate(model, data.x_test, data.y_test, loss_name)
         result["test_loss"], result["test_acc"] = test_loss, test_acc
 
