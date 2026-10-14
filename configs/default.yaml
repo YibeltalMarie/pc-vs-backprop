@@ -1,26 +1,40 @@
-# Default configuration. Values marked TUNE are placeholders:
-# they must be chosen on the validation set and justified in the report.
+# Default configuration.
+# Values marked OPEN are provisional: they exist so code can run, and are
+# replaced by the winner of a validation experiment (see the Decision record
+# in the project plan). Nothing marked OPEN is a final decision.
 
 seed: 0
-device: auto            # auto | cpu | cuda  (decide from measured epoch time)
+device: auto              # OPEN: decide from measured epoch time on CPU and GPU
 
 data:
   name: fashion_mnist
-  val_size: 10000       # taken from the 60k training set
-  normalize: train_mean_std
+  val_size: 10000         # convention: 50k train / 10k val / 10k test
+  split_seed: 42          # convention: fixed split, independent of model seed
+  normalize: train_global_mean_std   # convention: train-only statistics
+  augmentation: none      # convention: comparison is about the learning rule
 
 model:
-  hidden_sizes: [512, 256, 128]
-  activation: relu      # ablate: tanh, gelu
+  hidden_sizes: [512, 256, 128]   # OPEN: starting point; depth study decides
+  activation: relu                # OPEN: relu | tanh | gelu
+  init: he                        # OPEN: depends on activation (he | xavier)
+  loss: mse                       # OPEN: mse | cross_entropy
 
 training:
-  batch_size: 256       # TUNE (speed vs stability on Colab)
-  epochs: 30            # with early stopping on validation
-  weight_optimizer: sgd_momentum   # same for both models
-  lr: 0.01              # TUNE
+  batch_size: 256                 # OPEN: speed on Colab vs stability
+  max_epochs: 50                  # early stopping on validation decides
+  patience: 5
+  weight_optimizer: sgd_momentum  # OPEN: sgd_momentum | adam (same for both models)
+  lr: 0.01                        # OPEN: tuned on validation, equal budget per model
   momentum: 0.9
 
 pc:
-  inference_steps: 20   # TUNE (ablate 5, 10, 20, 50)
-  state_lr: 0.1         # TUNE
-  state_init: forward   # forward | zeros | random
+  inference_steps: 20             # OPEN: ablate 5, 10, 20, 50
+  state_lr: 0.1                   # OPEN: tuned on validation
+  state_init: forward             # OPEN: forward | zeros | random
+
+search_space:
+  activation: [relu, tanh, gelu]
+  loss: [mse, cross_entropy]
+  weight_optimizer: [sgd_momentum, adam]
+  inference_steps: [5, 10, 20, 50]
+  state_init: [forward, zeros, random]
