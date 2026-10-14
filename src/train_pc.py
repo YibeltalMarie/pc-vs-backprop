@@ -168,6 +168,7 @@ def train_pc(
 
     stopper.restore(net)
     if save_model:
+        path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(net.state_dict(), str(path).replace('.json', '.pt'))
     best = history[stopper.best_epoch] if history else None
 
