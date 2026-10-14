@@ -1,0 +1,176 @@
+{
+  "run_name": "backprop_relu_mse_sgd_momentum_lr0.2807_bs256_ls0.1_autograd_seed100",
+  "model": "backprop",
+  "seed": 100,
+  "grad_source": "autograd",
+  "config": {
+    "seed": 0,
+    "device": "auto",
+    "data": {
+      "name": "fashion_mnist",
+      "val_size": 10000,
+      "split_seed": 42,
+      "normalize": "train_global_mean_std",
+      "augmentation": "none"
+    },
+    "model": {
+      "hidden_sizes": [
+        512,
+        256,
+        128
+      ],
+      "activation": "relu",
+      "init": "he",
+      "last_layer_scale": 0.1,
+      "loss": "mse"
+    },
+    "training": {
+      "batch_size": 256,
+      "max_epochs": 15,
+      "patience": 5,
+      "weight_optimizer": "sgd_momentum",
+      "lr": 0.2807,
+      "momentum": 0.9
+    },
+    "pc": {
+      "inference_steps": 20,
+      "state_lr": 0.1,
+      "state_init": "forward"
+    },
+    "search_space": {
+      "activation": [
+        "relu",
+        "tanh",
+        "gelu"
+      ],
+      "last_layer_scale": [
+        1.0,
+        0.1,
+        0.01
+      ],
+      "loss": [
+        "mse",
+        "cross_entropy"
+      ],
+      "weight_optimizer": [
+        "sgd_momentum",
+        "adam"
+      ],
+      "inference_steps": [
+        5,
+        10,
+        20,
+        50
+      ],
+      "state_init": [
+        "forward",
+        "zeros",
+        "random"
+      ]
+    }
+  },
+  "layer_sizes": [
+    784,
+    512,
+    256,
+    128,
+    10
+  ],
+  "n_parameters": 567434,
+  "history": [
+    {
+      "epoch": 0,
+      "train_loss": NaN,
+      "val_loss": NaN,
+      "val_acc": 0.098,
+      "epoch_time_s": 0.3213162422180176,
+      "output_spread": NaN,
+      "dead_fractions": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "epoch": 1,
+      "train_loss": NaN,
+      "val_loss": NaN,
+      "val_acc": 0.098,
+      "epoch_time_s": 0.31574559211730957,
+      "output_spread": NaN,
+      "dead_fractions": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "epoch": 2,
+      "train_loss": NaN,
+      "val_loss": NaN,
+      "val_acc": 0.098,
+      "epoch_time_s": 0.3262314796447754,
+      "output_spread": NaN,
+      "dead_fractions": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "epoch": 3,
+      "train_loss": NaN,
+      "val_loss": NaN,
+      "val_acc": 0.098,
+      "epoch_time_s": 0.3106722831726074,
+      "output_spread": NaN,
+      "dead_fractions": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "epoch": 4,
+      "train_loss": NaN,
+      "val_loss": NaN,
+      "val_acc": 0.098,
+      "epoch_time_s": 0.3162729740142822,
+      "output_spread": NaN,
+      "dead_fractions": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    },
+    {
+      "epoch": 5,
+      "train_loss": NaN,
+      "val_loss": NaN,
+      "val_acc": 0.098,
+      "epoch_time_s": 0.3197922706604004,
+      "output_spread": NaN,
+      "dead_fractions": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  ],
+  "best_epoch": 0,
+  "best_val_acc": 0.098,
+  "best_val_loss": NaN,
+  "epochs_run": 6,
+  "stopped_early": true,
+  "total_train_time_s": 1.9498562812805176,
+  "mean_epoch_time_s": 0.31833847363789874,
+  "environment": {
+    "python": "3.13.15",
+    "torch": "2.11.0+cu130",
+    "numpy": "2.1.3",
+    "cuda_available": true,
+    "time": "2026-10-14 13:20:49",
+    "gpu": "Tesla T4"
+  },
+  "resumed": false
+}

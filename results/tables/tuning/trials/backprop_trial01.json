@@ -1,0 +1,35 @@
+{
+  "model": "backprop",
+  "trial": 1,
+  "params": {
+    "lr": 0.09598
+  },
+  "state_lr": null,
+  "max_epochs": 15,
+  "patience": 5,
+  "seeds": [
+    100,
+    101
+  ],
+  "per_seed": [
+    {
+      "seed": 100,
+      "best_val_acc": 0.098,
+      "epochs_run": 6,
+      "mean_epoch_time_s": 0.3928396701812744,
+      "total_train_time_s": 2.3943068981170654,
+      "diverged": false
+    },
+    {
+      "seed": 101,
+      "best_val_acc": 0.098,
+      "epochs_run": 6,
+      "mean_epoch_time_s": 0.3305724859237671,
+      "total_train_time_s": 2.0260467529296875,
+      "diverged": false
+    }
+  ],
+  "mean_val_acc": 0.098,
+  "total_time_s": 4.420353651046753,
+  "resumed": false
+}
