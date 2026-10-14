@@ -8,14 +8,15 @@ Protocol (see the Decision record in the project plan):
 - Trials are interleaved (trial 0 for both models, then trial 1, ...), so an interrupted
   session leaves both models with the same number of finished trials.
 - A trial's score = mean best-validation-accuracy over the tuning seeds; a diverged run
-  counts as 0.0.
+  counts as 0.0 (both trainers now stop and flag diverged runs).
 - Each trial is saved as its own JSON file; finished trials are skipped (resumable).
+- The lr range, T choices and base seed are parameters, so a second, narrower stage
+  can reuse everything (stage 1 used the defaults below).
 """
 
 import copy
 import math
 import random
-import time
 from pathlib import Path
 
 import pandas as pd
@@ -62,7 +63,8 @@ def score_runs(per_seed):
 
 
 def run_trial(model, trial_idx, base_cfg, data, seeds, out_dir, state_lr=0.2,
-              max_epochs=15, patience=5, force=False, verbose=True, base_seed=BASE_SEED):
+              max_epochs=15, patience=5, force=False, verbose=True, base_seed=BASE_SEED,
+              lr_range=LR_RANGE, t_choices=T_CHOICES):
     path = Path(out_dir) / "trials" / f"{model}_trial{trial_idx:02d}.json"
     if run_done(path) and not force:
         rec = load_json(path)
@@ -72,7 +74,7 @@ def run_trial(model, trial_idx, base_cfg, data, seeds, out_dir, state_lr=0.2,
                   f"(mean val acc {rec['mean_val_acc']:.4f})")
         return rec
 
-    params = sample_trial(trial_idx, model, base_seed)
+    params = sample_trial(trial_idx, model, base_seed, lr_range, t_choices)
     cfg = make_cfg(base_cfg, model, params, state_lr, max_epochs, patience)
     runs_dir = str(Path(out_dir) / "runs" / model)
 
@@ -98,6 +100,9 @@ def run_trial(model, trial_idx, base_cfg, data, seeds, out_dir, state_lr=0.2,
         "state_lr": state_lr if model == "pc" else None,
         "max_epochs": max_epochs,
         "patience": patience,
+        "lr_range": list(lr_range),
+        "t_choices": list(t_choices),
+        "base_seed": base_seed,
         "seeds": list(seeds),
         "per_seed": per_seed,
         "mean_val_acc": score_runs(per_seed),
@@ -128,14 +133,46 @@ def load_trials(out_dir) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def load_runs(out_dir) -> pd.DataFrame:
+    """One row per (trial, seed) training run, read from the saved run files."""
+    rows = []
+    for model in ("backprop", "pc"):
+        for p in sorted((Path(out_dir) / "runs" / model).glob("*.json")):
+            r = load_json(p)
+            rows.append({
+                "model": model,
+                "lr": r["config"]["training"]["lr"],
+                "T": r["config"]["pc"]["inference_steps"] if model == "pc" else None,
+                "seed": r["seed"],
+                "best_epoch": r["best_epoch"],
+                "epochs_run": r["epochs_run"],
+                "best_val_acc": r["best_val_acc"],
+                "diverged": bool(r.get("diverged", False)),
+            })
+    return pd.DataFrame(rows)
+
+
+def cap_report(df_runs, max_epochs):
+    """How many non-diverged runs peaked in the last 2 epochs of the epoch cap?
+    A high count means the cap is limiting that model's tuning result."""
+    ok = df_runs[(~df_runs.diverged.astype(bool)) & df_runs.best_val_acc.notna()]
+    for model in sorted(ok.model.unique()):
+        sub = ok[ok.model == model]
+        late = int((sub.best_epoch >= max_epochs - 2).sum())
+        print(f"{model}: {late} of {len(sub)} non-diverged runs peaked in the last 2 epochs "
+              f"of the {max_epochs}-epoch cap")
+
+
 def run_tuning(base_cfg, data, models=("backprop", "pc"), n_trials=12, seeds=(100, 101),
                out_dir="results/tables/tuning", state_lr=0.2, max_epochs=15, patience=5,
-               force=False, verbose=True) -> pd.DataFrame:
+               force=False, verbose=True, base_seed=BASE_SEED,
+               lr_range=LR_RANGE, t_choices=T_CHOICES) -> pd.DataFrame:
     """Run (or resume) the search. Trials are interleaved across models."""
     for k in range(n_trials):
         for model in models:
             run_trial(model, k, base_cfg, data, seeds, out_dir, state_lr=state_lr,
-                      max_epochs=max_epochs, patience=patience, force=force, verbose=verbose)
+                      max_epochs=max_epochs, patience=patience, force=force, verbose=verbose,
+                      base_seed=base_seed, lr_range=lr_range, t_choices=t_choices)
     return load_trials(out_dir)
 
 
