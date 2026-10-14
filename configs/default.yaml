@@ -17,6 +17,7 @@ model:
   hidden_sizes: [512, 256, 128]   # OPEN: starting point; depth study decides
   activation: relu                # OPEN: relu | tanh | gelu
   init: he                        # OPEN: depends on activation (he | xavier)
+  last_layer_scale: 0.1           # OPEN: 1.0 gave initial loss ~11 vs 0.45 constant predictor
   loss: mse                       # OPEN: mse | cross_entropy
 
 training:
@@ -34,6 +35,7 @@ pc:
 
 search_space:
   activation: [relu, tanh, gelu]
+  last_layer_scale: [1.0, 0.1, 0.01]
   loss: [mse, cross_entropy]
   weight_optimizer: [sgd_momentum, adam]
   inference_steps: [5, 10, 20, 50]
