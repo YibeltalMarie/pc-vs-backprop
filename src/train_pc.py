@@ -64,6 +64,7 @@ def train_pc(
     results_dir: str = "results/tables/pc",
     run_name: str = None,
     evaluate_test: bool = False,
+    save_model: bool = False,
     force: bool = False,
     verbose: bool = True,
 ) -> dict:
@@ -166,6 +167,8 @@ def train_pc(
             break
 
     stopper.restore(net)
+    if save_model:
+        torch.save(net.state_dict(), str(path).replace('.json', '.pt'))
     best = history[stopper.best_epoch] if history else None
 
     result = {
