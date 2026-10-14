@@ -5,6 +5,7 @@ Gradient source:
 - use_manual_grads=True: the hand-derived gradients (verified against autograd
   in tests); used to show both give the same training curve.
 The test set is only evaluated when evaluate_test=True (final runs only).
+Every epoch also records collapse diagnostics (output spread, dead units).
 """
 
 import time
@@ -14,7 +15,7 @@ import torch
 from src.data import iterate_batches
 from src.models.backprop_mlp import BackpropMLP
 from src.models.common import loss_fn
-from src.trainer_utils import EarlyStopper, evaluate, make_optimizer, run_file
+from src.trainer_utils import EarlyStopper, diagnostics, evaluate, make_optimizer, run_file
 from src.utils import environment_info, load_json, run_done, save_json
 
 NUM_CLASSES = 10
@@ -23,8 +24,9 @@ NUM_CLASSES = 10
 def default_run_name(cfg: dict, seed: int, use_manual_grads: bool = False) -> str:
     m, t = cfg["model"], cfg["training"]
     tag = "manual" if use_manual_grads else "autograd"
+    ls = m.get("last_layer_scale", 1.0)
     return (f"backprop_{m['activation']}_{m['loss']}_{t['weight_optimizer']}"
-            f"_lr{t['lr']}_bs{t['batch_size']}_{tag}_seed{seed}")
+            f"_lr{t['lr']}_bs{t['batch_size']}_ls{ls}_{tag}_seed{seed}")
 
 
 def train_backprop(
@@ -51,7 +53,8 @@ def train_backprop(
     device = data.x_train.device
     layer_sizes = [data.x_train.shape[1]] + list(m["hidden_sizes"]) + [NUM_CLASSES]
 
-    model = BackpropMLP(layer_sizes, activation=m["activation"], init=m["init"], seed=seed).to(device)
+    model = BackpropMLP(layer_sizes, activation=m["activation"], init=m["init"], seed=seed,
+                        last_layer_scale=m.get("last_layer_scale", 1.0)).to(device)
     opt = make_optimizer(model.parameters(), t["weight_optimizer"], t["lr"], t.get("momentum", 0.9))
     stopper = EarlyStopper(patience=t["patience"])
     shuffle_gen = torch.Generator().manual_seed(seed)
@@ -88,16 +91,21 @@ def train_backprop(
         epoch_time = time.time() - t0
 
         val_loss, val_acc = evaluate(model, data.x_val, data.y_val, loss_name)
+        diag = diagnostics(model, data.x_val)
         history.append({
             "epoch": epoch,
             "train_loss": running / n_train,
             "val_loss": val_loss,
             "val_acc": val_acc,
             "epoch_time_s": epoch_time,
+            **diag,
         })
         if verbose:
+            dead = diag["dead_fractions"]
+            dead_s = f" | dead {[round(d, 2) for d in dead]}" if dead is not None else ""
             print(f"epoch {epoch:3d} | train loss {running / n_train:.4f} | "
-                  f"val loss {val_loss:.4f} | val acc {val_acc:.4f} | {epoch_time:.1f}s")
+                  f"val loss {val_loss:.4f} | val acc {val_acc:.4f} | "
+                  f"spread {diag['output_spread']:.3f}{dead_s} | {epoch_time:.1f}s")
 
         if stopper.update(val_acc, epoch, model):
             stopped_early = True
