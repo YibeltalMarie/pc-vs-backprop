@@ -5,13 +5,15 @@ Rules implemented here (see the Decision record in the project plan):
 - early stopping with patience; the best epoch's weights are restored
 - evaluation runs in batches, never touching the test set unless asked
 - each run is saved as one JSON file; finished runs are skipped (resumable)
-- diagnostics() reports collapse indicators (output spread, dead ReLU units)
+- diagnostics() reports collapse indicators (output spread, dead ReLU units),
+  for any model that has .weights, .biases and .activation_name
 """
 
 import copy
 from pathlib import Path
 
 import torch
+import torch.nn.functional as F
 import yaml
 
 from src.models.common import loss_fn
@@ -46,6 +48,23 @@ def evaluate(model, x, y, loss: str, batch_size: int = 2000):
 
 
 @torch.no_grad()
+def relu_dead_fractions(model, x):
+    """Per hidden layer: fraction of units inactive (z <= 0) for EVERY sample in x.
+
+    Works for any model with .weights, .biases and .activation_name (backprop or PC).
+    Returns None for non-relu models.
+    """
+    if getattr(model, "activation_name", None) != "relu":
+        return None
+    a, fractions = x, []
+    for l in range(len(model.weights) - 1):
+        z = F.linear(a, model.weights[l], model.biases[l])
+        fractions.append(((z > 0).sum(dim=0) == 0).float().mean().item())
+        a = F.relu(z)
+    return fractions
+
+
+@torch.no_grad()
 def diagnostics(model, x, n: int = 2000) -> dict:
     """Collapse indicators on (up to) n samples.
 
@@ -57,9 +76,8 @@ def diagnostics(model, x, n: int = 2000) -> dict:
     """
     x = x[:n]
     out = model(x)
-    d = {"output_spread": out.std(dim=0).mean().item()}
-    d["dead_fractions"] = model.dead_fractions(x) if hasattr(model, "dead_fractions") else None
-    return d
+    return {"output_spread": out.std(dim=0).mean().item(),
+            "dead_fractions": relu_dead_fractions(model, x)}
 
 
 class EarlyStopper:
