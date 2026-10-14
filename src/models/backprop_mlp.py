@@ -25,13 +25,15 @@ from src.models.common import (
 
 
 class BackpropMLP(nn.Module):
-    def __init__(self, layer_sizes, activation: str = "relu", init: str = "he", seed: int = 0):
+    def __init__(self, layer_sizes, activation: str = "relu", init: str = "he",
+                 seed: int = 0, last_layer_scale: float = 1.0):
         super().__init__()
         self.layer_sizes = list(layer_sizes)
         self.activation_name = activation
         self.act, self.act_deriv = get_activation(activation)
 
-        initial = make_initial_weights(self.layer_sizes, init=init, seed=seed)
+        initial = make_initial_weights(self.layer_sizes, init=init, seed=seed,
+                                       last_layer_scale=last_layer_scale)
         self.weights = nn.ParameterList([nn.Parameter(W) for W, _ in initial])
         self.biases = nn.ParameterList([nn.Parameter(b) for _, b in initial])
 
@@ -86,6 +88,16 @@ class BackpropMLP(nn.Module):
         for l, (dW, db) in enumerate(grads):
             self.weights[l].grad = dW.clone()
             self.biases[l].grad = db.clone()
+
+    # ------------------------------------------------------------- diagnostics
+    @torch.no_grad()
+    def dead_fractions(self, x: torch.Tensor):
+        """Per hidden layer: fraction of units that are inactive (z <= 0) for
+        EVERY sample in x. Only meaningful for relu; returns None otherwise."""
+        if self.activation_name != "relu":
+            return None
+        _, cache = self.forward_cached(x)
+        return [((z > 0).sum(dim=0) == 0).float().mean().item() for z in cache["z"][:-1]]
 
     # --------------------------------------------------------------------- loss
     def loss(self, out: torch.Tensor, y: torch.Tensor, loss: str) -> torch.Tensor:
