@@ -1,0 +1,46 @@
+{
+  "model": "pc",
+  "trial": 0,
+  "params": {
+    "lr": 0.03608,
+    "inference_steps": 50
+  },
+  "state_lr": 0.2,
+  "max_epochs": 30,
+  "patience": 5,
+  "lr_range": [
+    0.01,
+    0.08
+  ],
+  "t_choices": [
+    20,
+    30,
+    50
+  ],
+  "base_seed": 54321,
+  "seeds": [
+    100,
+    101
+  ],
+  "per_seed": [
+    {
+      "seed": 100,
+      "best_val_acc": 0.8586,
+      "epochs_run": 16,
+      "mean_epoch_time_s": 6.517082437872887,
+      "total_train_time_s": 104.36543560028076,
+      "diverged": false
+    },
+    {
+      "seed": 101,
+      "best_val_acc": 0.8563,
+      "epochs_run": 17,
+      "mean_epoch_time_s": 6.595730921801398,
+      "total_train_time_s": 112.22607970237732,
+      "diverged": false
+    }
+  ],
+  "mean_val_acc": 0.85745,
+  "total_time_s": 216.59151530265808,
+  "resumed": false
+}
