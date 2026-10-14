@@ -123,13 +123,14 @@ class PCNetwork(nn.Module):
 
     # ------------------------------------------------------ state update rules
     @torch.no_grad()
-    def state_gradients(self, zs):
+    def state_gradients(self, zs, output_weight: float = 1.0):
         """Hand-derived dE/dz_k for the hidden states k = 1..L-1 (per-sample, no 1/B)."""
         eps, fprime = self._layer_terms(zs)
         grads = []
         for k in range(1, self.num_layers):
             own = eps[k - 1]
-            from_above = (eps[k] * fprime[k]) @ self.weights[k]
+            w = output_weight if k == self.num_layers - 1 else 1.0
+            from_above = w * ((eps[k] * fprime[k]) @ self.weights[k])
             grads.append(own - from_above)
         return grads
 
@@ -166,15 +167,17 @@ class PCNetwork(nn.Module):
 
     # --------------------------------------------------------------- weight update
     @torch.no_grad()
-    def weight_gradients(self, zs):
+    def weight_gradients(self, zs, output_weight: float = 1.0):
         """Hand-derived dE/dW, dE/db from the (settled) states; batch-mean convention."""
         B = zs[0].shape[0]
         eps, fprime = self._layer_terms(zs)
         grads = []
         for l in range(self.num_layers):
             delta = eps[l] * fprime[l]
-            dW = -(delta.T @ zs[l]) / B
-            db = -delta.sum(dim=0) / B
+            if l == self.num_layers - 1:
+                delta = delta * output_weight
+            dW = -(delta.T @ zs[l]) / B / output_weight
+            db = -delta.sum(dim=0) / B / output_weight
             grads.append((dW, db))
         return grads
 

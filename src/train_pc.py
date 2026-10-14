@@ -36,13 +36,15 @@ NUM_CLASSES = 10
 def default_run_name(cfg: dict, seed: int) -> str:
     m, t, p = cfg["model"], cfg["training"], cfg["pc"]
     ls = m.get("last_layer_scale", 1.0)
+    lam = p.get("output_weight", 1.0)
+    lam_s = "" if lam == 1.0 else f"_lam{lam}"
     return (f"pc_{m['activation']}_{m['loss']}_{t['weight_optimizer']}"
             f"_lr{t['lr']}_bs{t['batch_size']}_ls{ls}"
-            f"_T{p['inference_steps']}_eta{p['state_lr']}_{p['state_init']}_seed{seed}")
+            f"_T{p['inference_steps']}_eta{p['state_lr']}_{p['state_init']}{lam_s}_seed{seed}")
 
 
 @torch.no_grad()
-def settle(net, x, targets, steps, state_lr, init="forward", generator=None):
+def settle(net, x, targets, steps, state_lr, init="forward", generator=None, output_weight=1.0):
     """Initialize states, run `steps` state updates, return (states, energies_start, energies_end).
 
     Energies are per-layer batch means (tensors of length num_layers).
@@ -50,7 +52,7 @@ def settle(net, x, targets, steps, state_lr, init="forward", generator=None):
     zs = net.init_states(x, targets, init=init, generator=generator)
     e_start = net.layer_energies(zs)
     for _ in range(steps):
-        grads = net.state_gradients(zs)
+        grads = net.state_gradients(zs, output_weight)
         for k, g in enumerate(grads, start=1):
             zs[k] = zs[k] - state_lr * g
     e_end = net.layer_energies(zs)
@@ -95,6 +97,9 @@ def train_pc(
     shuffle_gen = torch.Generator().manual_seed(seed)
     state_gen = torch.Generator().manual_seed(seed + 1000)    # only used by state_init="random"
     loss_name = m["loss"]
+    lam = p.get("output_weight", 1.0)      # weak output clamp; 1.0 = standard PC
+    energy_w = torch.ones(net.num_layers)
+    energy_w[-1] = lam
     n_train = data.x_train.shape[0]
 
     history = []
@@ -115,14 +120,17 @@ def train_pc(
             targets = to_targets(yb, NUM_CLASSES, xb.dtype)
             opt.zero_grad()
             zs, e_start, e_end = settle(net, xb, targets, p["inference_steps"], p["state_lr"],
-                                        init=p["state_init"], generator=state_gen)
+                                        init=p["state_init"], generator=state_gen,
+                                        output_weight=lam)
             total_end = e_end.sum().item()
             if not math.isfinite(total_end):
                 diverged = True
                 break
             n_batches += 1
-            n_increase += int(total_end > e_start.sum().item() * (1.0 + 1e-9))
-            net.assign_gradients(net.weight_gradients(zs))
+            w_end = (e_end.cpu() * energy_w).sum().item()      # energy the states actually descend
+            w_start = (e_start.cpu() * energy_w).sum().item()
+            n_increase += int(w_end > w_start * (1.0 + 1e-9))
+            net.assign_gradients(net.weight_gradients(zs, lam))
             opt.step()
             e_start_sum += e_start.cpu() * xb.shape[0]
             e_end_sum += e_end.cpu() * xb.shape[0]
